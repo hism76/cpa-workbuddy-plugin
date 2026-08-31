@@ -45,6 +45,5 @@ plugins:
 要求 Go 1.23+ 与 CGO 编译环境：
 
 ```bash
-cd workbuddy
 CGO_ENABLED=1 go build -trimpath -buildmode=c-shared -o workbuddy.so .
 ```
