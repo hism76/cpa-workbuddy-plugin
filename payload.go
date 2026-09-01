@@ -41,6 +41,8 @@ func prepareUpstreamBody(payload, original []byte, sa *storedAuth, upstreamModel
 		}
 	}
 
+	// Default max_tokens and max_completion_tokens to 64000 with max_completion_tokens priority.
+	normalizeMaxTokensInPlace(obj)
 	// 2. normalizeTools: tool_choice object form → string; "none" suppresses tools.
 	normalizeToolsInPlace(obj)
 
@@ -481,4 +483,55 @@ func isEmptyValue(v any) bool {
 		return true
 	}
 	return false
+}
+
+
+const defaultMaxCompletionTokens = 64000
+
+func toInt64Value(v any) int64 {
+	switch n := v.(type) {
+	case int:
+		return int64(n)
+	case int64:
+		return n
+	case int32:
+		return int64(n)
+	case float64:
+		return int64(n)
+	case float32:
+		return int64(n)
+	case json.Number:
+		if i, err := n.Int64(); err == nil {
+			return i
+		}
+	}
+	return 0
+}
+
+// normalizeMaxTokensInPlace defaults max_tokens and max_completion_tokens to 64000
+// with max_completion_tokens having higher priority over max_tokens.
+func normalizeMaxTokensInPlace(obj map[string]any) bool {
+	var finalTokens int64 = defaultMaxCompletionTokens
+	changed := false
+
+	if mct, present := obj["max_completion_tokens"]; present {
+		if val := toInt64Value(mct); val > 0 {
+			finalTokens = val
+		}
+	} else if mt, present := obj["max_tokens"]; present {
+		if val := toInt64Value(mt); val > 0 {
+			finalTokens = val
+		}
+	}
+
+	if cur, ok := obj["max_tokens"]; !ok || toInt64Value(cur) != finalTokens {
+		obj["max_tokens"] = finalTokens
+		changed = true
+	}
+	if cur, ok := obj["max_completion_tokens"]; !ok || toInt64Value(cur) != finalTokens {
+		obj["max_completion_tokens"] = finalTokens
+		changed = true
+	}
+
+	return changed
 }
