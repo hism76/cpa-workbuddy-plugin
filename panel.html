@@ -187,6 +187,7 @@ button .spin{border-color:var(--on-acc);border-top-color:transparent}
     </div>
   </div>
   <div class="bar">
+    <button class="sec" id="loginBtn" onclick="openLoginModal()">网页登录</button>
     <button class="sec" id="importBtn" onclick="openImportModal()">导入凭证</button>
     <button class="sec" onclick="openDesensitizeModal()">屏蔽词设置</button>
     <button id="refreshBtn" onclick="load(true,this)">刷新数据</button>
@@ -207,6 +208,30 @@ button .spin{border-color:var(--on-acc);border-top-color:transparent}
   <div id="grid" class="grid"><div class="loading">加载中…</div></div>
   <footer class="footer">当前出口 IP：<strong id="egressIp" role="status">检测中…</strong></footer>
 </div>
+<div class="modal-mask" id="loginModal" onclick="onLoginMaskClick(event)">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="loginModalTitle">
+    <div class="modal-hd">
+      <h2 id="loginModalTitle">网页授权登录</h2>
+      <button type="button" class="modal-x" onclick="closeLoginModal()" aria-label="关闭">×</button>
+    </div>
+    <div class="modal-bd">
+      <p class="hint">支持国内版微信/手机扫码登录，以及国际版（codebuddy.ai）Google/GitHub 登录。</p>
+      <div style="margin-bottom:12px">
+        <label style="margin-right:16px"><input type="radio" name="loginRegion" value="cn" checked> 🇨🇳 国内版 (copilot.tencent.com)</label>
+        <label><input type="radio" name="loginRegion" value="global"> 🌐 国际版 (codebuddy.ai)</label>
+      </div>
+      <button type="button" id="startLoginBtn" onclick="doStartLogin(this)">生成登录链接</button>
+      <div id="loginResultArea" style="display:none;margin-top:14px;padding:10px;background:#f6f8fa;border-radius:6px">
+        <p class="hint">请在新窗口中打开以下链接完成登录授权：</p>
+        <p><a id="loginAuthLink" href="#" target="_blank" style="word-break:break-all;font-weight:bold;color:#0969da">点击前往登录页面</a></p>
+        <p class="hint" id="loginPollStatus" style="color:#1a7f37"><span class="spin"></span> 等待浏览器端授权中（自动检测完成）…</p>
+      </div>
+    </div>
+    <div class="modal-ft">
+      <button type="button" class="sec" onclick="closeLoginModal()">关闭</button>
+    </div>
+  </div>
+</div>
 <div class="modal-mask" id="importModal" onclick="onImportMaskClick(event)">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="importModalTitle">
     <div class="modal-hd">
@@ -214,7 +239,7 @@ button .spin{border-color:var(--on-acc);border-top-color:transparent}
       <button type="button" class="modal-x" onclick="closeImportModal()" aria-label="关闭">×</button>
     </div>
     <div class="modal-bd">
-      <p class="hint">支持 nested <code>{"auth":{...},"account":{...}}</code> 或 flat <code>{"accessToken":...}</code>。落盘为 <code>workbuddy-&lt;uid&gt;.json</code>。</p>
+      <p class="hint">支持国内版与国际版（codebuddy.ai）凭证，支持 nested、flat 或直接粘贴 CodeBuddy CLI/IDE Token。自动根据 JWT 识别 CN / Global。</p>
       <textarea id="importRaw" rows="8" placeholder='粘贴 WorkBuddy / CodeBuddy 凭证 JSON'></textarea>
       <label class="hint" for="importFiles">或选择 JSON 文件，每个最多 2 MiB</label>
       <input id="importFiles" type="file" multiple accept=".json,application/json">
@@ -1015,6 +1040,58 @@ async function restoreAllDesensitizeDefaults(btn){
   }catch(e){toast("恢复全部默认设置失败","err",e.message||String(e))}
   finally{busy(btn,false)}
 }
+let loginPollTimer=null;
+function openLoginModal(){
+  const m=document.getElementById("loginModal");
+  m.classList.add("show");
+  document.getElementById("loginResultArea").style.display="none";
+  if(loginPollTimer){clearInterval(loginPollTimer);loginPollTimer=null;}
+}
+function closeLoginModal(){
+  document.getElementById("loginModal").classList.remove("show");
+  if(loginPollTimer){clearInterval(loginPollTimer);loginPollTimer=null;}
+}
+function onLoginMaskClick(e){
+  if(e.target===document.getElementById("loginModal")) closeLoginModal();
+}
+async function doStartLogin(btn){
+  busy(btn,true);
+  try{
+    const region=document.querySelector(x27input[name="loginRegion"]:checkedx27)?.value||x27cnx27;
+    const res=await api(x27/login/startx27,{method:x27POSTx27,body:JSON.stringify({region})});
+    if(!res||!res.success||!res.url) throw new Error(res?.error||x27生成登录链接失败x27);
+    const area=document.getElementById("loginResultArea");
+    area.style.display="block";
+    const a=document.getElementById("loginAuthLink");
+    a.href=res.url;
+    window.open(res.url,x27_blankx27);
+    pollLoginStatus(res.state);
+    toast(x27已打开登录页，请在浏览器中完成授权x27,x27okx27);
+  }catch(err){
+    toast(x27发起登录失败: x27+err.message,x27errx27);
+  }finally{
+    busy(btn,false);
+  }
+}
+function pollLoginStatus(state){
+  if(loginPollTimer) clearInterval(loginPollTimer);
+  const statusEl=document.getElementById("loginPollStatus");
+  statusEl.innerHTML=x27<span class="spin"></span> 等待浏览器端授权中（自动检测完成）…x27;
+  loginPollTimer=setInterval(async()=>{
+    try{
+      const res=await api(x27/login/poll?state=x27+encodeURIComponent(state));
+      if(res&&res.status===x27successx27){
+        clearInterval(loginPollTimer);
+        loginPollTimer=null;
+        statusEl.innerHTML=x27✅ 登录成功！账号已保存。x27;
+        toast(x27登录成功！已自动保存并加载账号x27,x27okx27);
+        closeLoginModal();
+        load(true);
+      }
+    }catch(_){}
+  },2500);
+}
+
 function openImportModal(){
   const m=document.getElementById("importModal");
   m.classList.add("show");

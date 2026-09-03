@@ -31,7 +31,7 @@ func acquireUserResourceSlot() func() {
 // www.codebuddy.cn; Global uses www.workbuddy.ai.
 func isGlobalDomain(domain string) bool {
 	d := strings.ToLower(strings.TrimSpace(domain))
-	return d == "workbuddy.ai" || strings.HasSuffix(d, ".workbuddy.ai")
+	return d == "workbuddy.ai" || strings.HasSuffix(d, ".workbuddy.ai") || d == "codebuddy.ai" || strings.HasSuffix(d, ".codebuddy.ai")
 }
 
 // accountRegion returns "cn" or "global" based on the auth's domain field.

@@ -5,6 +5,8 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,6 +17,55 @@ import (
 )
 
 // handleImportAuth accepts nested or flat credential JSON and persists via host.auth.save.
+func saveStoredAuthToHost(sa *storedAuth) (map[string]any, error) {
+	if sa == nil {
+		return nil, fmt.Errorf("storedAuth is nil")
+	}
+	fileJSON, err := buildAuthFileJSON(sa, false, displayNote(sa, nil, false), nil)
+	if err != nil {
+		return nil, err
+	}
+	auth := toAuthData(sa)
+	saveReq := pluginapi.HostAuthSaveRequest{
+		Name: auth.FileName,
+		JSON: fileJSON,
+	}
+	saveBody, _ := json.Marshal(saveReq)
+	rawResp, err := hostCall(pluginabi.MethodHostAuthSave, saveBody)
+	if err != nil {
+		return nil, fmt.Errorf("host.auth.save: %w", err)
+	}
+	var env envelope
+	if err := json.Unmarshal(rawResp, &env); err != nil || !env.OK {
+		msg := "host.auth.save failed"
+		if env.Error != nil && env.Error.Message != "" {
+			msg = env.Error.Message
+		}
+		return nil, errors.New(msg)
+	}
+	var saveResp pluginapi.HostAuthSaveResponse
+	_ = json.Unmarshal(env.Result, &saveResp)
+	if saveResp.Name != "" && !strings.EqualFold(saveResp.Name, authFileName) {
+		legacyPath := strings.TrimSpace(saveResp.Path)
+		if legacyPath != "" {
+			dir := filepath.Dir(legacyPath)
+			legacyFile := filepath.Join(dir, authFileName)
+			legacyRaw, readErr := os.ReadFile(legacyFile)
+			if readErr == nil && shouldDeleteLegacyForUID(legacyRaw, sa.Account.UID) {
+				_ = deleteAuthFileInDir(legacyFile, dir)
+			}
+		}
+	}
+	return map[string]any{
+		"success":  true,
+		"name":     saveResp.Name,
+		"path":     saveResp.Path,
+		"uid":      sa.Account.UID,
+		"nickname": sa.Account.Nickname,
+		"file":     auth.FileName,
+	}, nil
+}
+
 func handleImportAuth(req pluginapi.ManagementRequest) map[string]any {
 	var body struct {
 		JSON json.RawMessage `json:"json"`
@@ -32,52 +83,11 @@ func handleImportAuth(req pluginapi.ManagementRequest) map[string]any {
 	if err != nil {
 		return map[string]any{"success": false, "error": err.Error()}
 	}
-	// Persist nested storage + top-level type/note/logo/disabled for Auth page.
-	fileJSON, err := buildAuthFileJSON(sa, false, displayNote(sa, nil, false), nil)
+	res, err := saveStoredAuthToHost(sa)
 	if err != nil {
 		return map[string]any{"success": false, "error": err.Error()}
 	}
-	auth := toAuthData(sa)
-	saveReq := pluginapi.HostAuthSaveRequest{
-		Name: auth.FileName,
-		JSON: fileJSON,
-	}
-	saveBody, _ := json.Marshal(saveReq)
-	rawResp, err := hostCall(pluginabi.MethodHostAuthSave, saveBody)
-	if err != nil {
-		return map[string]any{"success": false, "error": "host.auth.save: " + err.Error()}
-	}
-	var env envelope
-	if err := json.Unmarshal(rawResp, &env); err != nil || !env.OK {
-		msg := "host.auth.save failed"
-		if env.Error != nil && env.Error.Message != "" {
-			msg = env.Error.Message
-		}
-		return map[string]any{"success": false, "error": msg}
-	}
-	var saveResp pluginapi.HostAuthSaveResponse
-	_ = json.Unmarshal(env.Result, &saveResp)
-	// Remove legacy workbuddy.json if it exists and differs from the saved name.
-	if saveResp.Name != "" && !strings.EqualFold(saveResp.Name, authFileName) {
-		legacyPath := strings.TrimSpace(saveResp.Path)
-		// Best-effort: if auth dir is known via saveResp.Path parent, try removing sibling workbuddy.json.
-		if legacyPath != "" {
-			dir := filepath.Dir(legacyPath)
-			legacyFile := filepath.Join(dir, authFileName)
-			legacyRaw, readErr := os.ReadFile(legacyFile)
-			if readErr == nil && shouldDeleteLegacyForUID(legacyRaw, sa.Account.UID) {
-				_ = deleteAuthFileInDir(legacyFile, dir)
-			}
-		}
-	}
-	return map[string]any{
-		"success":  true,
-		"name":     saveResp.Name,
-		"path":     saveResp.Path,
-		"uid":      sa.Account.UID,
-		"nickname": sa.Account.Nickname,
-		"file":     auth.FileName,
-	}
+	return res
 }
 
 func handleCheckinConfig(req pluginapi.ManagementRequest) map[string]any {

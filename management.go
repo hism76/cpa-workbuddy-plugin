@@ -25,7 +25,7 @@ type managementRequestWire struct {
 var billingBase = "https://www.codebuddy.cn"
 
 // billingBaseGlobal is the international (www.workbuddy.ai) billing base.
-var billingBaseGlobal = "https://www.workbuddy.ai"
+var billingBaseGlobal = "https://www.codebuddy.ai"
 
 // If the panel later wants to surface "usage export ready", re-add it and wire
 // it into buildDashboardEx's response.
@@ -178,6 +178,8 @@ func managementRegistration() managementRegistrationResponse {
 			{Method: http.MethodPost, Path: base + "/select", Description: "Select the active account card used for chat routing (body: {auth_index})."},
 			{Method: http.MethodPost, Path: base + "/keepalive", Description: "Manually refresh access tokens for all accounts (or one with auth_index)."},
 			{Method: http.MethodGet, Path: base + "/keepalive/status", Description: "Last keepalive run summary + config."},
+			{Method: http.MethodPost, Path: base + "/login/start", Description: "Start OAuth login flow (CN or Global)."},
+			{Method: http.MethodGet, Path: base + "/login/poll", Description: "Poll OAuth login flow status."},
 		},
 		Resources: []resourceRoute{
 			{Path: "/panel", Menu: "WorkBuddy", Description: "WorkBuddy dashboard: credits, check-in, plan, import."},
@@ -252,6 +254,10 @@ func handleManagement(raw []byte) ([]byte, error) {
 		return okEnvelope(mgmtJSONResponse(http.StatusOK, handleKeepaliveNowWithCallback(req.ManagementRequest, req.HostCallbackID)))
 	case req.Method == http.MethodGet && path == base+"/keepalive/status":
 		return okEnvelope(mgmtJSONResponse(http.StatusOK, handleKeepaliveStatus()))
+	case req.Method == http.MethodPost && path == base+"/login/start":
+		return okEnvelope(mgmtJSONResponse(http.StatusOK, handleManagementLoginStart(req.ManagementRequest)))
+	case req.Method == http.MethodGet && path == base+"/login/poll":
+		return okEnvelope(mgmtJSONResponse(http.StatusOK, handleManagementLoginPoll(req.ManagementRequest)))
 	}
 	return okEnvelope(mgmtJSONResponse(http.StatusNotFound, map[string]any{"error": "not found: " + path}))
 }
@@ -397,3 +403,79 @@ func mgmtHTMLResponse(body []byte) pluginapi.ManagementResponse {
 var (
 	checkinLocks sync.Map // auth_index -> *sync.Mutex
 )
+
+func handleManagementLoginStart(req pluginapi.ManagementRequest) map[string]any {
+	var body struct {
+		Region string `json:"region"`
+	}
+	_ = json.Unmarshal(req.Body, &body)
+	region := strings.ToLower(strings.TrimSpace(body.Region))
+	if region != "global" {
+		region = "cn"
+	}
+	rawReq, _ := json.Marshal(map[string]any{"region": region})
+	rawResp, err := handleStartLogin(rawReq)
+	if err != nil {
+		return map[string]any{"success": false, "error": err.Error()}
+	}
+	var env envelope
+	if err := json.Unmarshal(rawResp, &env); err != nil || !env.OK {
+		msg := "login start failed"
+		if env.Error != nil && env.Error.Message != "" {
+			msg = env.Error.Message
+		}
+		return map[string]any{"success": false, "error": msg}
+	}
+	var st pluginapi.AuthLoginStartResponse
+	_ = json.Unmarshal(env.Result, &st)
+	return map[string]any{
+		"success":    true,
+		"url":        st.URL,
+		"state":      st.State,
+		"region":     region,
+		"expires_at": st.ExpiresAt,
+	}
+}
+
+func handleManagementLoginPoll(req pluginapi.ManagementRequest) map[string]any {
+	state := strings.TrimSpace(req.Query.Get("state"))
+	if state == "" {
+		return map[string]any{"success": false, "error": "missing state"}
+	}
+	pollReq, _ := json.Marshal(pluginapi.AuthLoginPollRequest{State: state})
+	rawResp, err := handlePollLogin(pollReq)
+	if err != nil {
+		return map[string]any{"success": false, "error": err.Error()}
+	}
+	var env envelope
+	if err := json.Unmarshal(rawResp, &env); err != nil || !env.OK {
+		msg := "login poll failed"
+		if env.Error != nil && env.Error.Message != "" {
+			msg = env.Error.Message
+		}
+		return map[string]any{"success": false, "error": msg}
+	}
+	var pollResp pluginapi.AuthLoginPollResponse
+	_ = json.Unmarshal(env.Result, &pollResp)
+	if pollResp.Status == pluginapi.AuthLoginStatusSuccess {
+		sa, parseErr := parseStored(pollResp.Auth.StorageJSON)
+		if parseErr != nil {
+			return map[string]any{"success": false, "error": "parse auth storage: " + parseErr.Error()}
+		}
+		saveRes, saveErr := saveStoredAuthToHost(sa)
+		if saveErr != nil {
+			return map[string]any{"success": false, "error": "save auth: " + saveErr.Error()}
+		}
+		return map[string]any{
+		"success": true,
+		"status":  "success",
+		"save":    saveRes,
+		"auth":    pollResp.Auth,
+		}
+	}
+	return map[string]any{
+		"success": true,
+		"status":  "pending",
+		"message": pollResp.Message,
+	}
+}

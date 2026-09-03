@@ -9,6 +9,8 @@ func TestIsGlobalDomain(t *testing.T) {
 	}{
 		{"www.workbuddy.ai", true},
 		{"workbuddy.ai", true},
+		{"codebuddy.ai", true},
+		{"www.codebuddy.ai", true},
 		{"www.codebuddy.cn", false},
 		{"", false},
 		{"WORKBUDDY.AI", true},
@@ -35,6 +37,7 @@ func TestAccountRegion(t *testing.T) {
 		{"empty domain", &storedAuth{}, "cn"},
 		{"CN domain", &storedAuth{Auth: storedTokens{Domain: "www.codebuddy.cn"}}, "cn"},
 		{"Global domain", &storedAuth{Auth: storedTokens{Domain: "www.workbuddy.ai"}}, "global"},
+		{"CodeBuddy.ai domain", &storedAuth{Auth: storedTokens{Domain: "www.codebuddy.ai"}}, "global"},
 	}
 	for _, tc := range cases {
 		if got := accountRegion(tc.sa); got != tc.region {
@@ -70,7 +73,7 @@ func TestOriginRefererFor(t *testing.T) {
 		{"nil", nil, originReferer},
 		{"empty domain", &storedAuth{}, originReferer},
 		{"CN domain", &storedAuth{Auth: storedTokens{Domain: "www.codebuddy.cn"}}, originReferer},
-		{"Global domain", &storedAuth{Auth: storedTokens{Domain: "www.workbuddy.ai"}}, "https://www.workbuddy.ai"},
+		{"Global domain", &storedAuth{Auth: storedTokens{Domain: "www.workbuddy.ai"}}, originRefererGlobal},
 	}
 	for _, tc := range cases {
 		if got := originRefererFor(tc.sa); got != tc.want {

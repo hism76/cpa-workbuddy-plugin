@@ -427,7 +427,7 @@ func TestModelRuntimeDifferentAuthIsolation(t *testing.T) {
 			}
 			<-cnRelease
 			return &hostHTTPResponse{StatusCode: http.StatusOK, Headers: make(http.Header), Body: []byte(`{"code":0,"data":{"agents":[{"name":"cli","models":["cn-model"]}]}}`)}, nil
-		case "www.workbuddy.ai":
+		case "www.workbuddy.ai", "www.codebuddy.ai":
 			if globalCalls.Add(1) == 1 {
 				close(globalStarted)
 			}

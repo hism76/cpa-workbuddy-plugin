@@ -105,26 +105,65 @@ func doJSONRequest(client *http.Client, req *http.Request) (json.RawMessage, int
 
 type oauthRequestProfile struct {
 	mode      string
+	region    string
 	stateURL  string
+	tokenURL  string
+	acctURL   string
 	userAgent string
 	origin    string
 }
 
-func oauthProfileForMode(mode string) oauthRequestProfile {
+func (p oauthRequestProfile) authTokenURL(state string) string {
+	if p.tokenURL != "" {
+		return p.tokenURL + state
+	}
+	return endpointAuthToken + state
+}
+
+func (p oauthRequestProfile) loginAcctURL(state string) string {
+	if p.acctURL != "" {
+		return p.acctURL + state
+	}
+	return endpointLoginAcct + state
+}
+
+func oauthProfileForModeAndRegion(mode, region string) oauthRequestProfile {
+	region = strings.ToLower(strings.TrimSpace(region))
+	if region == "global" {
+		return oauthRequestProfile{
+			mode:      oauthClientModeCLI,
+			region:    "global",
+			stateURL:  "https://www.codebuddy.ai/v2/plugin/auth/state?platform=CLI",
+			tokenURL:  "https://www.codebuddy.ai/v2/plugin/auth/token?state=",
+			acctURL:   "https://www.codebuddy.ai/v2/plugin/login/account?state=",
+			userAgent: clientUA,
+			origin:    "https://www.codebuddy.ai",
+		}
+	}
 	if mode == oauthClientModeWorkBuddy {
 		return oauthRequestProfile{
 			mode:      oauthClientModeWorkBuddy,
+			region:    "cn",
 			stateURL:  upstreamBaseCN + "/v2/plugin/auth/state?platform=workbuddy",
+			tokenURL:  upstreamBaseCN + "/v2/plugin/auth/token?state=",
+			acctURL:   upstreamBaseCN + "/v2/plugin/login/account?state=",
 			userAgent: "WorkBuddy/5.3.14 WorkBuddy/5.3.14 CLI/2.115.0",
 			origin:    "https://www.workbuddy.cn",
 		}
 	}
 	return oauthRequestProfile{
 		mode:      oauthClientModeCLI,
+		region:    "cn",
 		stateURL:  endpointAuthState,
+		tokenURL:  endpointAuthToken,
+		acctURL:   endpointLoginAcct,
 		userAgent: clientUA,
 		origin:    originReferer,
 	}
+}
+
+func oauthProfileForMode(mode string) oauthRequestProfile {
+	return oauthProfileForModeAndRegion(mode, "cn")
 }
 
 func applyOAuthProfileHeaders(req *http.Request, profile oauthRequestProfile) {
@@ -158,7 +197,7 @@ func buildAuthStateRequest(profile oauthRequestProfile) (*http.Request, error) {
 }
 
 func buildAuthTokenRequest(profile oauthRequestProfile, state string) (*http.Request, error) {
-	req, err := http.NewRequest(http.MethodGet, endpointAuthToken+state, nil)
+	req, err := http.NewRequest(http.MethodGet, profile.authTokenURL(state), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -167,7 +206,7 @@ func buildAuthTokenRequest(profile oauthRequestProfile, state string) (*http.Req
 }
 
 func buildLoginAccountRequest(profile oauthRequestProfile, state, accessToken string) (*http.Request, error) {
-	req, err := http.NewRequest(http.MethodGet, endpointLoginAcct+state, nil)
+	req, err := http.NewRequest(http.MethodGet, profile.loginAcctURL(state), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -224,7 +263,21 @@ func handleStartLogin(raw []byte) ([]byte, error) {
 	if features := currentFeatureRuntime(); features != nil {
 		mode = features.oauthClientMode
 	}
-	profile := oauthProfileForMode(mode)
+	region := "cn"
+	if len(raw) > 0 {
+		var req struct {
+			Region   string         `json:"region"`
+			Metadata map[string]any `json:"metadata"`
+		}
+		if err := json.Unmarshal(raw, &req); err == nil {
+			if req.Region != "" {
+				region = req.Region
+			} else if reg, ok := req.Metadata["region"].(string); ok && reg != "" {
+				region = reg
+			}
+		}
+	}
+	profile := oauthProfileForModeAndRegion(mode, region)
 	stateReq, err := buildAuthStateRequest(profile)
 	if err != nil {
 		return nil, fmt.Errorf("auth state failed: %w", err)
@@ -347,6 +400,10 @@ func handlePollLogin(raw []byte) ([]byte, error) {
 		loginStates.Delete(state)
 		return nil, fmt.Errorf("poll: %w", err)
 	}
+	if profile.region == "global" && (sa.Auth.Domain == "" || !isGlobalDomain(sa.Auth.Domain)) {
+		sa.Auth.Domain = "www.codebuddy.ai"
+	}
+	populateClaimsFromJWT(sa)
 	loginStates.Delete(state)
 	return okEnvelope(pluginapi.AuthLoginPollResponse{
 		Status: pluginapi.AuthLoginStatusSuccess,

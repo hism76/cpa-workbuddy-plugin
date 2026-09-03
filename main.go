@@ -62,11 +62,13 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -85,10 +87,10 @@ const (
 	upstreamBaseCN = "https://copilot.tencent.com"
 	// Global chat/auth gateway (iss = workbuddy.ai realm). APISIX on
 	// copilot.tencent.com rejects Global JWTs with 401; must use workbuddy.ai.
-	upstreamBaseGlobal  = "https://www.workbuddy.ai"
+	upstreamBaseGlobal  = "https://www.codebuddy.ai"
 	clientUA            = "CLI/2.63.2 CodeBuddy/2.63.2"
 	originReferer       = "https://www.codebuddy.cn"
-	originRefererGlobal = "https://www.workbuddy.ai"
+	originRefererGlobal = "https://www.codebuddy.ai"
 
 	// CN endpoint aliases (login / chat). upstreamBaseCN is the only
 	// CN base; Global has its own upstreamBaseGlobal. No "upstreamBase" legacy
@@ -454,6 +456,53 @@ type authStateData struct {
 	AuthURL string `json:"authUrl"`
 }
 
+func populateClaimsFromJWT(sa *storedAuth) {
+	if sa == nil || sa.Auth.AccessToken == "" {
+		return
+	}
+	parts := strings.Split(sa.Auth.AccessToken, ".")
+	if len(parts) != 3 {
+		return
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return
+	}
+	var claims struct {
+		Sub      string `json:"sub"`
+		Iss      string `json:"iss"`
+		Exp      int64  `json:"exp"`
+		Nickname string `json:"nickname"`
+		Username string `json:"preferred_username"`
+	}
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		return
+	}
+	if sa.Account.UID == "" && claims.Sub != "" {
+		sa.Account.UID = claims.Sub
+	}
+	if sa.Account.Nickname == "" {
+		if claims.Nickname != "" {
+		sa.Account.Nickname = claims.Nickname
+		} else if claims.Username != "" {
+		sa.Account.Nickname = claims.Username
+		}
+	}
+	if sa.Auth.ExpiresAt <= 0 && claims.Exp > 0 {
+		sa.Auth.ExpiresAt = claims.Exp
+	}
+	if sa.Auth.Domain == "" && claims.Iss != "" {
+		if u, err := url.Parse(claims.Iss); err == nil && u.Hostname() != "" {
+			host := strings.ToLower(u.Hostname())
+			if strings.Contains(host, "codebuddy.ai") || strings.Contains(host, "workbuddy.ai") {
+				sa.Auth.Domain = "www.codebuddy.ai"
+			} else {
+				sa.Auth.Domain = "www.codebuddy.cn"
+			}
+		}
+	}
+}
+
 func parseStored(raw []byte) (*storedAuth, error) {
 	if len(raw) == 0 {
 		return nil, fmt.Errorf("empty auth storage")
@@ -489,6 +538,7 @@ func parseStored(raw []byte) (*storedAuth, error) {
 	if sa.Auth.AccessToken == "" {
 		return nil, fmt.Errorf("parse_error: missing accessToken")
 	}
+	populateClaimsFromJWT(&sa)
 	return &sa, nil
 }
 
