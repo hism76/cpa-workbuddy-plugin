@@ -721,18 +721,19 @@ func toAuthData(sa *storedAuth) pluginapi.AuthData {
 // toAuthDataOpts builds AuthData with optional credits snapshot and disabled flag.
 func toAuthDataOpts(sa *storedAuth, cr *creditsSummary, disabled bool) pluginapi.AuthData {
 	storage, _ := json.Marshal(sa)
-	id := providerName
-	fileName := authFileName
+	prov := providerName
+	id := prov
+	fileName := prov + ".json"
 	if sa != nil {
 		if uid := sanitizeUIDForFileName(sa.Account.UID); uid != "" {
 			id = uid
-			fileName = "workbuddy-" + uid + ".json"
+			fileName = prov + "-" + uid + ".json"
 		}
 	}
 	label := labelForAuth(sa)
 	meta := enrichAuthMetadata(sa, cr, disabled)
 	return pluginapi.AuthData{
-		Provider:    providerName,
+		Provider:    prov,
 		ID:          id,
 		FileName:    fileName,
 		Label:       label,

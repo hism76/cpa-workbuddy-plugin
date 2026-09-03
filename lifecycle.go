@@ -551,10 +551,16 @@ func listEntryMatchesUID(f pluginapi.HostAuthFileEntry, uid, wantName string) bo
 // enrichAuthMetadata builds Metadata map for AuthData (type/logo/note/disabled).
 func enrichAuthMetadata(sa *storedAuth, cr *creditsSummary, disabled bool) map[string]any {
 	note := displayNote(sa, cr, disabled)
+	prov := providerName
+	logo := pluginLogoURL
+	if sa != nil && isGlobalDomain(sa.Auth.Domain) {
+		prov = "codebuddy"
+		logo = "https://www.codebuddy.ai/favicon.ico"
+	}
 	return map[string]any{
-		"type":     providerName,
-		"provider": providerName,
-		"logo":     pluginLogoURL,
+		"type":     prov,
+		"provider": prov,
+		"logo":     logo,
 		"note":     note,
 		"disabled": disabled,
 	}

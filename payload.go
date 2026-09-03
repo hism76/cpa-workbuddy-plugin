@@ -151,12 +151,9 @@ func ensureSystemMessageInPlace(obj map[string]any, sa *storedAuth) bool {
 	if !ok || len(messages) == 0 {
 		return false
 	}
-	for _, m := range messages {
-		msg, ok := m.(map[string]any)
-		if !ok {
-			continue
-		}
-		if role, _ := msg["role"].(string); strings.EqualFold(role, "system") {
+	firstMsg, ok := messages[0].(map[string]any)
+	if ok {
+		if role, _ := firstMsg["role"].(string); strings.EqualFold(role, "system") {
 			return false
 		}
 	}

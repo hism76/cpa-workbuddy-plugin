@@ -192,10 +192,16 @@ func buildAuthFileJSON(sa *storedAuth, disabled bool, note string, extra map[str
 	if err := json.Unmarshal(storage, &nested); err != nil {
 		return nil, err
 	}
+	prov := providerName
+	logo := pluginLogoURL
+	if sa != nil && isGlobalDomain(sa.Auth.Domain) {
+		prov = "codebuddy"
+		logo = "https://www.codebuddy.ai/favicon.ico"
+	}
 	out := map[string]any{
-		"type":     providerName,
-		"provider": providerName,
-		"logo":     pluginLogoURL,
+		"type":     prov,
+		"provider": prov,
+		"logo":     logo,
 		"disabled": disabled,
 		"note":     note,
 		"auth":     nested["auth"],

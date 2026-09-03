@@ -26,7 +26,7 @@ type rpcHostAuthGetResponse struct {
 
 func isWorkbuddyAuthListName(name string) bool {
 	name = strings.ToLower(strings.TrimSpace(name))
-	return name == authFileName || strings.HasPrefix(name, providerName+"-")
+	return name == authFileName || strings.HasPrefix(name, providerName+"-") || strings.HasPrefix(name, "workbuddy-") || strings.HasPrefix(name, "codebuddy-")
 }
 
 // hostAuthList returns all workbuddy credentials known to the host.
