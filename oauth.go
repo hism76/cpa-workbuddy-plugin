@@ -263,7 +263,7 @@ func handleStartLogin(raw []byte) ([]byte, error) {
 	if features := currentFeatureRuntime(); features != nil {
 		mode = features.oauthClientMode
 	}
-	region := "cn"
+	region := defaultRegion
 	if len(raw) > 0 {
 		var req struct {
 			Region   string         `json:"region"`

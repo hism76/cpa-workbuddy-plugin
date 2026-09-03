@@ -221,10 +221,14 @@ button .spin{border-color:var(--on-acc);border-top-color:transparent}
         <label><input type="radio" name="loginRegion" value="global"> 🌐 国际版 (codebuddy.ai)</label>
       </div>
       <button type="button" id="startLoginBtn" onclick="doStartLogin(this)">生成登录链接</button>
-      <div id="loginResultArea" style="display:none;margin-top:14px;padding:10px;background:#f6f8fa;border-radius:6px">
-        <p class="hint">请在新窗口中打开以下链接完成登录授权：</p>
-        <p><a id="loginAuthLink" href="#" target="_blank" style="word-break:break-all;font-weight:bold;color:#0969da">点击前往登录页面</a></p>
-        <p class="hint" id="loginPollStatus" style="color:#1a7f37"><span class="spin"></span> 等待浏览器端授权中（自动检测完成）…</p>
+      <div id="loginResultArea" style="display:none;margin-top:14px;padding:14px;background:var(--card,#1e2024);border:1px solid var(--border,#30363d);border-radius:8px">
+        <p class="hint" style="margin-bottom:10px">已成功生成官方授权会话，请点击下方按钮前往授权：</p>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+          <a id="loginAuthBtnLink" href="#" target="_blank" rel="noopener" style="display:inline-block;padding:8px 16px;background:#1f6feb;color:#fff;border-radius:6px;text-decoration:none;font-weight:bold;text-align:center;flex:1">👉 立即前往授权登录</a>
+          <button type="button" class="sec" onclick="copyAuthLink()">复制链接</button>
+        </div>
+        <p class="hint" style="font-size:12px;color:var(--muted,#8b949e);margin-bottom:8px">💡 授权完成后请切回本页面，系统会自动检测并落盘保存凭证。</p>
+        <p class="hint" id="loginPollStatus" style="color:#2ea043;font-weight:bold"><span class="spin"></span> 等待授权中（自动检测完成）…</p>
       </div>
     </div>
     <div class="modal-ft">
@@ -1072,6 +1076,11 @@ async function doStartLogin(btn){
   }finally{
     busy(btn,false);
   }
+}
+let currentLoginURL="";
+function copyAuthLink(){
+  if(!currentLoginURL) return;
+  navigator.clipboard.writeText(currentLoginURL).then(()=>toast('链接已复制到剪贴板','ok')).catch(()=>prompt('请手动复制授权链接：',currentLoginURL));
 }
 function pollLoginStatus(state){
   if(loginPollTimer) clearInterval(loginPollTimer);

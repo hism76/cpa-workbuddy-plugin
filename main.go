@@ -79,10 +79,14 @@ import (
 	"github.com/router-for-me/CLIProxyAPI/v7/sdk/pluginapi"
 )
 
-const (
+var (
 	providerName  = "workbuddy"
 	authFileName  = "workbuddy.json"
 	pluginLogoURL = "https://raw.githubusercontent.com/DGZSbot/ai-icon/refs/heads/main/WorkBuddy.png"
+	defaultRegion = "cn"
+)
+
+const (
 	// CN chat/auth gateway (iss = codebuddy.cn realm).
 	upstreamBaseCN = "https://copilot.tencent.com"
 	// Global chat/auth gateway (iss = workbuddy.ai realm). APISIX on
@@ -341,15 +345,29 @@ type registrationCapability struct {
 // version is injected at build time via -ldflags "-X main.version=...".
 var version = "0.9.3"
 
+func getPluginDisplayName() string {
+	if providerName == "codebuddy" {
+		return "CodeBuddy"
+	}
+	return providerName
+}
+
+func getPluginLogoURL() string {
+	if providerName == "codebuddy" {
+		return "https://www.codebuddy.ai/favicon.ico"
+	}
+	return pluginLogoURL
+}
+
 func wbRegistration() registration {
 	return registration{
 		SchemaVersion: pluginabi.SchemaVersion,
 		Metadata: pluginapi.Metadata{
-			Name:             providerName,
+			Name:             getPluginDisplayName(),
 			Version:          version,
 			Author:           "Sliverkiss (based on workbuddy by lovingfish)",
 			GitHubRepository: "https://github.com/Sliverkiss/cpa-plugin",
-			Logo:             pluginLogoURL,
+			Logo:             getPluginLogoURL(),
 			ConfigFields: []pluginapi.ConfigField{
 				{Name: "checkin_auto", Type: pluginapi.ConfigFieldTypeBoolean, Description: "Enable daily auto check-in at 09:00 and 21:00 local time for CN accounts (default true)."},
 				{Name: "lifecycle_auto", Type: pluginapi.ConfigFieldTypeBoolean, Description: "Auto disable CN / delete Global when credits exhausted; re-enable CN after check-in restores credits (default true)."},
