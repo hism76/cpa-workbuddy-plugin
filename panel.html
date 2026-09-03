@@ -1057,18 +1057,18 @@ function onLoginMaskClick(e){
 async function doStartLogin(btn){
   busy(btn,true);
   try{
-    const region=document.querySelector(x27input[name="loginRegion"]:checkedx27)?.value||x27cnx27;
-    const res=await api(x27/login/startx27,{method:x27POSTx27,body:JSON.stringify({region})});
-    if(!res||!res.success||!res.url) throw new Error(res?.error||x27生成登录链接失败x27);
+    const region=document.querySelector('input[name="loginRegion"]:checked')?.value||'cn';
+    const res=await api('/login/start',{method:'POST',body:JSON.stringify({region})});
+    if(!res||!res.success||!res.url) throw new Error(res?.error||'生成登录链接失败');
     const area=document.getElementById("loginResultArea");
     area.style.display="block";
     const a=document.getElementById("loginAuthLink");
     a.href=res.url;
-    window.open(res.url,x27_blankx27);
+    window.open(res.url,'_blank');
     pollLoginStatus(res.state);
-    toast(x27已打开登录页，请在浏览器中完成授权x27,x27okx27);
+    toast('已打开登录页，请在浏览器中完成授权','ok');
   }catch(err){
-    toast(x27发起登录失败: x27+err.message,x27errx27);
+    toast('发起登录失败: '+err.message,'err');
   }finally{
     busy(btn,false);
   }
@@ -1076,15 +1076,15 @@ async function doStartLogin(btn){
 function pollLoginStatus(state){
   if(loginPollTimer) clearInterval(loginPollTimer);
   const statusEl=document.getElementById("loginPollStatus");
-  statusEl.innerHTML=x27<span class="spin"></span> 等待浏览器端授权中（自动检测完成）…x27;
+  statusEl.innerHTML='<span class="spin"></span> 等待浏览器端授权中（自动检测完成）…';
   loginPollTimer=setInterval(async()=>{
     try{
-      const res=await api(x27/login/poll?state=x27+encodeURIComponent(state));
-      if(res&&res.status===x27successx27){
+      const res=await api('/login/poll?state='+encodeURIComponent(state));
+      if(res&&res.status==='success'){
         clearInterval(loginPollTimer);
         loginPollTimer=null;
-        statusEl.innerHTML=x27✅ 登录成功！账号已保存。x27;
-        toast(x27登录成功！已自动保存并加载账号x27,x27okx27);
+        statusEl.innerHTML='✅ 登录成功！账号已保存。';
+        toast('登录成功！已自动保存并加载账号','ok');
         closeLoginModal();
         load(true);
       }
