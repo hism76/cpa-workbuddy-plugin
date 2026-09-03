@@ -181,9 +181,14 @@ func managementRegistration() managementRegistrationResponse {
 			{Method: http.MethodPost, Path: base + "/login/start", Description: "Start OAuth login flow (CN or Global)."},
 			{Method: http.MethodGet, Path: base + "/login/poll", Description: "Poll OAuth login flow status."},
 		},
-		Resources: []resourceRoute{
-			{Path: "/panel", Menu: "WorkBuddy", Description: "WorkBuddy dashboard: credits, check-in, plan, import."},
-		},
+		Resources: func() []resourceRoute {
+			if providerName == "codebuddy" {
+				return nil
+			}
+			return []resourceRoute{
+				{Path: "/panel", Menu: "WorkBuddy", Description: "WorkBuddy dashboard: credits, check-in, plan, import."},
+			}
+		}(),
 	}
 }
 

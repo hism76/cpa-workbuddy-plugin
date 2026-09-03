@@ -78,11 +78,20 @@ func buildModelStatus(files []pluginapi.HostAuthFileEntry) modelStatus {
 	if runtime != nil {
 		metadata = runtime.metadataStatus()
 	}
+	if len(files) == 0 {
+		return modelStatus{
+			State:             modelNotStarted,
+			Message:           modelStatusMessages[modelNotStarted],
+			MetadataSource:    metadata.Source,
+			MetadataFetchedAt: modelStatusTime(metadata.FetchedAt),
+			Auths:             []modelAuthStatus{},
+		}
+	}
+	auths := make([]modelAuthStatus, 0, len(files))
 	state := modelReady
 	if len(files) == 0 {
 		state = modelNotStarted
 	}
-	auths := make([]modelAuthStatus, 0, len(files))
 	for _, file := range files {
 		snapshot := modelReadinessSnapshot{State: modelNotStarted, ModelSource: modelSourceNone}
 		if runtime != nil {
@@ -188,6 +197,17 @@ func buildDashboardExWithCallback(force, fetchCredits bool, callbackID string) m
 			acct.Nickname = sa.Account.Nickname
 			acct.UID = sa.Account.UID
 			acct.Region = accountRegion(sa)
+			if runtime := activeModelRuntime.Load(); runtime != nil {
+				if runtime.snapshotForAuthID(f.ID).State == modelNotStarted {
+					raw, _ := json.Marshal(sa)
+					_ = runtime.ensureForAuth(authModelRequestWire{
+						AuthModelRequest: pluginapi.AuthModelRequest{
+							AuthID:      f.ID,
+							StorageJSON: raw,
+						},
+					})
+				}
+			}
 			if fetchCredits {
 				plan, ci, cr, errs := cachedAccountDetailsWithCallback(f.ID, sa, force, callbackID)
 				acct.Plan = plan
