@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/sha256"
 	"errors"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -267,8 +268,10 @@ func (r *modelRuntime) ensureForAuth(req authModelRequestWire) modelReadinessSna
 	r.configCommitMu.RLock()
 	configGeneration := r.configGeneration.Load()
 	var configuredModels []string
+	var extraModels []string
 	if features := currentFeatureRuntime(); features != nil {
 		configuredModels = features.configuredModels
+		extraModels = features.extraModels
 	}
 	key := modelGenerationKey{
 		Config:         configGeneration,
@@ -419,6 +422,23 @@ func (r *modelRuntime) ensureForAuth(req authModelRequestWire) modelReadinessSna
 	models := make([]pluginapi.ModelInfo, len(modelSelection.cache.Models))
 	for i, model := range modelSelection.cache.Models {
 		models[i] = modelInfoFromSources(model, matchModelsDevRecord(model.ID, metadata.cache.Records))
+	}
+	if len(extraModels) > 0 {
+		seen := make(map[string]struct{}, len(models))
+		for _, m := range models {
+			seen[strings.ToLower(m.ID)] = struct{}{}
+		}
+		for _, extraID := range extraModels {
+			extraID = strings.TrimSpace(extraID)
+			if extraID == "" {
+				continue
+			}
+			if _, exists := seen[strings.ToLower(extraID)]; !exists {
+				serving := modelFacts{ID: extraID}
+				models = append(models, modelInfoFromSources(serving, matchModelsDevRecord(extraID, metadata.cache.Records)))
+				seen[strings.ToLower(extraID)] = struct{}{}
+			}
+		}
 	}
 	snapshot.Models = models
 	if modelSelection.source == modelSourceFresh && metadata.source == modelSourceFresh {

@@ -1,4 +1,8 @@
 # Changelog
+## 0.9.4
+### Model discovery & configuration
+- Add optional `extra_models` YAML configuration to allow seamlessly appending supplementary models (such as `deepseek-v4.1-flash`, `hy4-preview`, `hy3`) alongside dynamic model discovery with automatic deduplication.
+- Upgrade CLIProxyAPI SDK dependency to v7.2.158.
 
 ## 0.9.3
 

@@ -673,3 +673,15 @@ func TestConfiguredModelsSwitchToEmptyResumesWorkBuddyCacheDiscovery(t *testing.
 		t.Fatalf("dynamic fallback rewrote catalog: before=%s after=%s", catalogBefore, after)
 	}
 }
+
+func TestParseFeatureRuntimeExtraModels(t *testing.T) {
+	raw := []byte("extra_models:\n  - deepseek-v4.1-flash\n  - hy4-preview\n  - hy3\n")
+	cfg, err := parseFeatureRuntime(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := []string{"deepseek-v4.1-flash", "hy4-preview", "hy3"}
+	if !sameStrings(cfg.extraModels, expected) {
+		t.Fatalf("extra models = %#v, want %#v", cfg.extraModels, expected)
+	}
+}

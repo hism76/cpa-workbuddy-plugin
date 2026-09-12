@@ -49,6 +49,7 @@ type featureRuntimeConfig struct {
 	oauthClientMode    string
 	enterpriseCredits  bool
 	configuredModels   []string
+	extraModels        []string
 }
 
 var featureRuntime atomic.Pointer[featureRuntimeConfig]
@@ -69,6 +70,7 @@ func currentFeatureRuntime() *featureRuntimeConfig {
 	snapshot := *cfg
 	snapshot.desensitizeTerms = append([]string(nil), cfg.desensitizeTerms...)
 	snapshot.configuredModels = append([]string(nil), cfg.configuredModels...)
+	snapshot.extraModels = append([]string(nil), cfg.extraModels...)
 	return &snapshot
 }
 
@@ -78,6 +80,7 @@ type featureConfigYAML struct {
 	OAuthClientMode   string    `yaml:"oauth_client_mode"`
 	EnterpriseCredits *bool     `yaml:"enterprise_credits"`
 	Models            yaml.Node `yaml:"models"`
+	ExtraModels       yaml.Node `yaml:"extra_models"`
 }
 
 func parseFeatureRuntime(raw []byte) (*featureRuntimeConfig, error) {
@@ -111,6 +114,10 @@ func parseFeatureRuntime(raw []byte) (*featureRuntimeConfig, error) {
 	if err != nil {
 		return nil, err
 	}
+	extraModels, err := normalizedConfiguredModels(doc.ExtraModels)
+	if err != nil {
+		return nil, err
+	}
 	return &featureRuntimeConfig{
 		desensitizeEnabled: doc.Desensitize != nil && *doc.Desensitize,
 		desensitizeTerms:   terms,
@@ -119,6 +126,7 @@ func parseFeatureRuntime(raw []byte) (*featureRuntimeConfig, error) {
 		oauthClientMode:    mode,
 		enterpriseCredits:  doc.EnterpriseCredits != nil && *doc.EnterpriseCredits,
 		configuredModels:   models,
+		extraModels:        extraModels,
 	}, nil
 }
 

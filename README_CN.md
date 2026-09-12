@@ -46,6 +46,10 @@ plugins:
       token_keepalive: true
     codebuddy:
       enabled: true
+      extra_models:
+        - deepseek-v4.1-flash
+        - hy4-preview
+        - hy3
 ```
 
 ### 网络代理配置建议
